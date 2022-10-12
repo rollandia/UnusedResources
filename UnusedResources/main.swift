@@ -11,8 +11,8 @@ import Foundation
 
 private enum Constants {
     static let swiftGenPrefix = "internal static let"
-    static let generatedFilePath = "generated.swift"
-    static let generatedFileName = "Localizable.swift"
+    static let locacalizableFile = "Localizable.swift"
+    static let swiftExtension = "swift"
 }
 
 // MARK: - File processing
@@ -20,7 +20,7 @@ private enum Constants {
 let dispatchGroup = DispatchGroup.init()
 let serialWriterQueue = DispatchQueue.init(label: "writer")
 
-func findFilesIn(_ directories: [String], withExtensions extensions: [String]) -> [String] {
+func findFilesIn(_ directories: [String], withExtensions extensions: [String], exceptPaths: [String] = []) -> [String] {
     let fileManager = FileManager.default
     var files = [String]()
     for directory in directories {
@@ -32,7 +32,16 @@ func findFilesIn(_ directories: [String], withExtensions extensions: [String]) -
             let fileExtension = (path as NSString).pathExtension.lowercased()
             if extensions.contains(fileExtension) {
                 let fullPath = (directory as NSString).appendingPathComponent(path)
-                if !(fullPath.contains(Constants.generatedFilePath) || fullPath.contains(Constants.generatedFileName)) {
+
+                var legal = true
+                for exceptPath in exceptPaths {
+                    if fullPath.contains(exceptPath) {
+                        legal = false
+                        break
+                    }
+                }
+
+                if legal {
                     files.append(fullPath)
                 }
             }
@@ -51,7 +60,7 @@ func contentsOfFile(_ filePath: String) -> String {
 }
 
 func concatenateAllSourceCodeIn(_ directories: [String]) -> String {
-    let sourceFiles = findFilesIn(directories, withExtensions: ["swift"])
+    let sourceFiles = findFilesIn(directories, withExtensions: [Constants.swiftExtension], exceptPaths: ["Generated", Constants.locacalizableFile])
     return sourceFiles.reduce("") { (accumulator, sourceFile) -> String in
         return accumulator + contentsOfFile(sourceFile)
     }
@@ -82,7 +91,10 @@ func extractStringIdentifierFromTrimmedLine(_ line: String) -> String {
 // MARK: - Unused identifier detection
 
 func findStringIdentifiersIn(_ stringsFile: String, abandonedBySourceCode sourceCode: String) -> [String] {
-    return extractStringIdentifiersFrom(stringsFile).filter { !sourceCode.contains($0) }
+    return extractStringIdentifiersFrom(stringsFile).filter {
+        !sourceCode.contains($0)
+
+    }
 }
 
 func stringsFile(_ stringsFile: String, without identifiers: [String]) -> String {
@@ -150,6 +162,5 @@ if let args = getCommandLineArgs(), let roodDirectory = args.first {
         displayAbandonedIdentifiersInMap(map)
     }
 } else {
-    print("Please provide the root directory for source code files as a command line argument.")
+    print("Please provide the root and generated files directories for source code files as a command line argument.")
 }
-
